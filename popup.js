@@ -1,0 +1,58 @@
+const el=id=>document.getElementById(id);
+const fieldIds=['enabled','timezone','locale','languages','geoEnabled','latitude','longitude'];
+let currentTab,customProfiles={},lastIP;
+const defaults={enabled:false,preset:'custom',timezone:'UTC',locale:'en-US',languages:['en-US','en'],latitude:0,longitude:0,geoEnabled:false};
+function readSettings(){return {enabled:el('enabled').checked,preset:el('preset').value,timezone:el('timezone').value.trim(),locale:el('locale').value.trim(),languages:readLanguageList(),geoEnabled:el('geoEnabled').checked,latitude:Number(el('latitude').value),longitude:Number(el('longitude').value)};}
+function render(s){for(const id of fieldIds){if(!(id in s))continue;const e=el(id);if(e.type==='checkbox')e.checked=s[id];else e.value=Array.isArray(s[id])?s[id].join(', '):s[id];}if(s.preset)el('preset').value=s.preset;el('simpleLanguage').value=el('locale').value;window.updateZonePreview();window.updateLanguagePreview();summary();}
+function summary(){el('profileSummary').textContent=`${el('locale').value} · ${el('timezone').value}${el('geoEnabled').checked?` · ${el('latitude').value}, ${el('longitude').value}`:''}`;}
+function dirty(){el('status').textContent=t('unsaved');summary();}
+function profileOptions(selected){
+ const p=el('preset');p.replaceChildren(new Option(t('custom'),'custom'));
+ for(const [id,s] of Object.entries(REGION_PROFILES)){const name=new Intl.DisplayNames([uiLang],{type:'language'}).of(s.locale);p.add(new Option(`${name} · ${s.timezone.split('/').pop().replaceAll('_',' ')}`,id));}
+ for(const [id,s] of Object.entries(customProfiles))p.add(new Option('★ '+s.name,id));
+ p.value=[...p.options].some(x=>x.value===selected)?selected:'custom';
+}
+function syncBasicLanguage(){el('simpleLanguage').value=el('locale').value;summary();}
+async function showState(){
+ if(!currentTab?.id)return;
+ const s=await chrome.storage.local.get(defaults),state=(await chrome.storage.session.get('tab:'+currentTab.id))['tab:'+currentTab.id];
+ const active=/^https?:\/\//.test(currentTab.url||'')&&s.enabled&&state&&!state.error&&state.text==='Применено';
+ el('stateDot').style.background=!s.enabled?'#9298a4':active?'#22b573':'#e24b50';
+ el('stateText').textContent=!s.enabled?t('off'):active?t('working'):t('failed');
+ if(state?.error)el('stateText').title=state.text;
+}
+el('uiLanguage').value=uiChoice;el('uiLanguage').addEventListener('change',()=>{localStorage.setItem('uiLanguage',el('uiLanguage').value);location.reload();});
+el('mode').value=localStorage.getItem('mode')||'simple';
+function mode(){el('advancedSettings').hidden=el('mode').value!=='advanced';localStorage.setItem('mode',el('mode').value);}
+el('mode').addEventListener('change',mode);mode();
+for(const section of document.querySelectorAll('details')){section.open=localStorage.getItem(section.id)==='open';section.addEventListener('toggle',()=>localStorage.setItem(section.id,section.open?'open':'closed'));}
+for(const item of languageItems)el('simpleLanguage').add(new Option(`${new Intl.DisplayNames([uiLang],{type:'language'}).of(item.code)} · ${item.code}`,item.code));
+el('simpleLanguage').addEventListener('change',()=>{chooseLanguage(el('simpleLanguage').value);dirty();});
+el('preset').addEventListener('change',()=>{const id=el('preset').value,s=REGION_PROFILES[id]||customProfiles[id];if(s)render({...s,preset:id,geoEnabled:s.geoEnabled??true});dirty();});
+for(const id of fieldIds)el(id).addEventListener('input',()=>{if(id!=='enabled'){el('preset').value='custom';syncBasicLanguage();}dirty();});
+// Picker buttons change the locale without changing region fields.
+for(const id of ['languageResults','quickLanguages','languageOrder','zoneResults'])el(id).addEventListener('click',()=>{syncBasicLanguage();dirty();});
+el('save').addEventListener('click',async()=>{el('save').disabled=true;try{const r=await chrome.runtime.sendMessage({type:'save',settings:readSettings()});if(!r.ok)throw Error(r.error);el('status').textContent=t('saved');await showState();}catch(e){el('status').textContent=e.message;}finally{el('save').disabled=false;}});
+el('reload').addEventListener('click',async()=>{if(currentTab?.id)await chrome.tabs.reload(currentTab.id);});
+el('storeProfile').addEventListener('click',async()=>{try{const name=el('profileName').value.trim();if(!name)throw Error(t('nameRequired'));const settings=readSettings();const id='user:'+crypto.randomUUID();customProfiles[id]={...settings,name};await chrome.storage.local.set({customProfiles});profileOptions(id);el('status').textContent=t('profileSaved');}catch(e){el('status').textContent=e.message;}});
+el('deleteProfile').addEventListener('click',async()=>{const id=el('preset').value;if(!id.startsWith('user:'))return;delete customProfiles[id];await chrome.storage.local.set({customProfiles});profileOptions('custom');});
+async function checkIP(){
+ const out=el('ipResult');out.textContent='IP · '+t('checking');
+ try{const response=await fetch('https://ipwho.is/',{credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(8000)});if(!response.ok)throw Error('HTTP '+response.status);const d=await response.json();if(d.success!==true||typeof d.ip!=='string')throw Error(d.message||'Invalid IP response');lastIP=d;out.textContent=`IP: ${d.ip}\n${t('ipLocation')}: ${[d.country,d.city].filter(Boolean).join(', ')}\n${d.timezone?.id||''}\n${t('ipPrivacy')}`;}catch(e){out.textContent=t('ipFailed')+' · '+e.message;}
+}
+async function checkPage(){
+ const panel=el('diagnostics');panel.textContent=t('checking');
+ try{
+  [currentTab]=await chrome.tabs.query({active:true,currentWindow:true});if(!/^https?:\/\//.test(currentTab?.url||''))throw Error(t('unsupported'));
+  const p=await chrome.storage.local.get(defaults);
+  const results=await chrome.scripting.executeScript({target:{tabId:currentTab.id},world:'MAIN',func:()=>({language:navigator.language,languages:[...navigator.languages],locale:new Intl.DateTimeFormat().resolvedOptions().locale,numberLocale:new Intl.NumberFormat().resolvedOptions().locale,timezone:new Intl.DateTimeFormat().resolvedOptions().timeZone})});
+  const d=results[0]?.result;if(!d)throw Error(t('failed'));
+  const zone=x=>new Intl.DateTimeFormat('en',{timeZone:x}).resolvedOptions().timeZone;
+  const rows=[['navigator.language',d.language,p.locale],['navigator.languages',d.languages.join(', '),p.languages.join(', ')],['Intl.DateTimeFormat',d.locale,p.locale],['Intl.NumberFormat',d.numberLocale,p.locale],['timeZone',zone(d.timezone),zone(p.timezone)]];
+  const passes=rows.filter(x=>x[1]===x[2]).length;
+  if(p.enabled&&passes<rows.length){await chrome.storage.session.set({['tab:'+currentTab.id]:{error:true,text:'Проверка: '+passes+'/'+rows.length}});await chrome.action.setIcon({tabId:currentTab.id,path:Object.fromEntries([16,20,24,32,48].map(n=>[n,`icons/red-${n}.png`]))});}
+  panel.textContent=`${p.enabled?'':t('off')+'\n'}${passes}/${rows.length}\n`+rows.map(([name,actual,expected])=>`${actual===expected?'✓':'✕'} ${name}: ${actual}${actual===expected?'':` → ${expected}`}`).join('\n')+'\n\n'+t('checkNote');await showState();
+ }catch(e){panel.textContent=e.message;}
+}
+el('diagnose').addEventListener('click',async()=>{el('diagnose').disabled=true;await Promise.allSettled([checkIP(),checkPage()]);el('diagnose').disabled=false;});
+globalThis.popupReady=(async()=>{localizeUI();const s=await chrome.storage.local.get({...defaults,customProfiles:{}});customProfiles=s.customProfiles||{};const legacy={fi:'fi-FI','fi-ru':'custom',de:'de-DE',it:'it-IT',ru:'ru-RU'};s.preset=legacy[s.preset]||s.preset;profileOptions(s.preset);render(s);[currentTab]=await chrome.tabs.query({active:true,currentWindow:true});await showState();})().catch(e=>el('status').textContent=e.message);

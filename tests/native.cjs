@@ -1,0 +1,22 @@
+const vm=require('node:vm'),fs=require('node:fs'),assert=require('node:assert/strict');
+const hooks={},local={},session={},calls=[];let attached=false,fail=false,rule;
+const event=n=>({addListener:f=>hooks[n]=f});
+const chrome={storage:{local:{get:async d=>({...d,...local}),set:async s=>Object.assign(local,s)},session:{get:async k=>k===null?{...session}:{[k]:session[k]},set:async s=>Object.assign(session,s),remove:async k=>{for(const x of [k].flat())delete session[x]}}},debugger:{getTargets:async()=>[{tabId:1,attached}],attach:async()=>{attached=true},detach:async()=>{attached=false},sendCommand:async(t,m,p)=>{calls.push([m,p]);if(fail&&m==='Emulation.setLocaleOverride')throw Error('CDP failure');if(m==='Runtime.evaluate')return {result:{value:{userAgent:'Original UA',platform:'Win32',userAgentMetadata:{brands:[],platform:'Windows',mobile:false}}}};},onDetach:event('detach')},action:{setIcon:async()=>{},setBadgeText:async()=>{},setBadgeBackgroundColor:async()=>{}},declarativeNetRequest:{updateDynamicRules:async r=>{rule=r}},tabs:{query:async()=>[{id:1,url:'https://example.com'}],get:async id=>({id,url:'https://example.com'}),onCreated:event('created'),onRemoved:event('removed')},webNavigation:{onBeforeNavigate:event('nav')},runtime:{onMessage:event('message'),onInstalled:event('installed'),onStartup:event('startup')}};
+const ctx=vm.createContext({chrome,console});ctx.importScripts=p=>vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'..',p),'utf8'),ctx);
+vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../background.js'),'utf8'),ctx);
+const save=settings=>new Promise(resolve=>hooks.message({type:'save',settings},{},resolve));
+(async()=>{
+ const base=vm.runInContext('({...DEFAULT,enabled:true})',ctx);
+ assert.equal((await save(base)).ok,true);assert(attached);
+ assert.equal(calls.find(x=>x[0]==='Emulation.setUserAgentOverride')[1].acceptLanguage,'en-US,en');
+ assert.equal(calls.find(x=>x[0]==='Emulation.setUserAgentOverride')[1].userAgent,'Original UA');
+ assert.equal(rule.addRules[0].action.requestHeaders[0].value,'en-US,en;q=0.9');
+ assert.equal((await save({...base,locale:'ru-RU'})).ok,false);
+ assert.equal(local.locale,'en-US');
+ assert.equal((await save({...base,languages:['bad\r\nheader']})).ok,false);
+ await save({...base,geoEnabled:false});assert(calls.some(x=>x[0]==='Emulation.clearGeolocationOverride'));
+ await save({...base,enabled:false});assert(!attached);assert.equal(rule.addRules.length,0);
+ fail=true;await save(base);assert(!attached);assert.equal(session['tab:1'].error,true);
+ fail=false;attached=true;await save(base);assert(session['tab:1'].text.includes('занята'));
+ console.log('PASS: native commands, UA preservation, weighted headers, locale validation, invalid language rejection, geo reset, disable cleanup, CDP error cleanup, debugger conflict');
+})().catch(e=>{console.error(e);process.exitCode=1});
