@@ -30,6 +30,6 @@ const run=s=>vm.runInContext(s,ctx);
  session['tab:1']={text:'CDP test failure',error:true};await stateListener({'tab:1':{}},'session');assert.equal(els.stateDot.style.background,'#972b2b');assert.equal(els.stateDetail.textContent,'CDP test failure');
  session['tab:1']={text:'Применено',error:false};await stateListener({'tab:1':{}},'session');assert.equal(els.stateDot.style.background,'#2b973c');assert.equal(els.stateDetail.textContent,'');
  delete session['tab:1'];await stateListener({'tab:1':{}},'session');assert.equal(els.stateDot.style.background,'#9298a4');assert.equal(els.stateText.textContent,run("t('pending')"));
- for(const key of translated.map(e=>e.dataset.i18n))for(const l of ['ru','en','de','fi','it'])assert(run(`!!UI_TEXT.${l}[${JSON.stringify(key)}]`),key);
- console.log('PASS: UI initialization, system language, 5 translations, '+run('Object.keys(REGION_PROFILES).length')+' region profiles, simple/advanced, independent language, custom profile, IP response/privacy/offline and tab diagnostics');
+ for(const key of translated.map(e=>e.dataset.i18n))for(const l of ['ru','en','de','fi','it','fr','es','pt-BR','zh-CN','ja','ar','fa'])assert(run(`!!UI_TEXT[${JSON.stringify(l)}][${JSON.stringify(key)}]`),key);
+ console.log('PASS: UI initialization, system language, 12 translations, '+run('Object.keys(REGION_PROFILES).length')+' region profiles, simple/advanced, independent language, custom profile, IP response/privacy/offline and tab diagnostics');
 })().catch(e=>{console.error(e);process.exitCode=1});

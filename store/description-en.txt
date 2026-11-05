@@ -1,0 +1,34 @@
+Interface languages: English, Russian, German, Finnish, Italian, French, Spanish, Portuguese (Brazil), Chinese (Simplified), Japanese, Arabic and Persian (Farsi).
+
+Eclipse lets you choose the language, locale, time zone and location that your browser reports to websites. Use a regional profile or adjust each setting independently.
+
+Useful for multilingual browsing, checking website localization, and aligning browser preferences when using a VPN or proxy.
+
+FEATURES
+• Set the primary website language and the order of additional languages.
+• Adjust the Accept-Language request header.
+• Choose the locale used to format dates and numbers.
+• Select a time zone, with automatic daylight saving time handling.
+• Optionally override geographical coordinates.
+• Choose regional presets or save your own profiles.
+• Switch between simple and advanced settings.
+• Check the current tab’s language, locale and time zone.
+• Check your public IP when you request it.
+• Use Arabic and Persian interfaces with right-to-left layout.
+
+CLEAR STATUS
+The power button applies your current settings immediately and stays pressed while enabled. A green indicator means the settings were applied to the current tab. Red indicates an application error or a mismatch found during a check. Grey indicates that the override is off, pending or unavailable. Error details appear in the popup.
+
+PRIVACY
+Settings are stored locally in your browser. The optional IP check contacts ipwho.is only when you request it. That service sees your outgoing public IP but does not receive the current tab’s URL, page content or profile settings. With split routing, the extension’s IP may differ from the website tab’s IP.
+
+HOW IT WORKS
+Eclipse uses the Chrome Debugger API to apply browser overrides. Chrome may display a debugging notification. Opening Developer Tools or attaching another debugger can interrupt the overrides.
+
+Settings apply without a mandatory page reload. Values a website has already cached may require a reload to update. Location access may still require the website’s permission prompt.
+
+Eclipse does not change your IP address, translate page text, replace a VPN or guarantee anonymity or access to a particular service. Websites may also use account settings, cookies and other signals. Built-in checks cover the main page context; HTTP headers, workers, WebRTC and DNS are not verified by the diagnostic panel.
+
+Free for non-commercial use under the project’s license.
+Source code, documentation and license:
+https://github.com/boklagvladimir-dev/eclipse
