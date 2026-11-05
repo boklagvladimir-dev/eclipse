@@ -20,7 +20,7 @@ When you request diagnostics, Eclipse reads the current page's reported language
 
 ## Optional public IP and approximate-location check
 
-Clicking “Check current tab and IP” starts a request to https://ipwho.is/, a third-party IP information service. This request reveals the outgoing public IP address to that service. The service returns the IP address and approximate geographical information, such as country, city and time zone, which Eclipse displays in the popup.
+Clicking “Check IP”, or the combined “Check current tab and IP” button, starts a request to https://ipwho.is/, a third-party IP information service. This request reveals the outgoing public IP address to that service. The service returns the IP address and approximate geographical information, such as country, city and time zone, which Eclipse displays in the popup. The country name may be localized by the browser. Flag images are bundled with the extension and do not require a separate request to an image server.
 
 The IP check does not run automatically in the background. Eclipse sends the request over HTTPS without credentials or a referrer. It does not include the current tab's URL, page content or your saved profile settings in the request. The IP response is used in the popup and is not saved by Eclipse in persistent extension storage.
 

@@ -91,10 +91,31 @@ el('save').addEventListener('click',saveSettings);
 el('reload').addEventListener('click',async()=>{try{if(currentTab?.id)await chrome.tabs.reload(currentTab.id);}catch(e){el('status').textContent=isMissingTab(e)?t('unsupported'):e.message;}});
 el('storeProfile').addEventListener('click',async()=>{try{const name=el('profileName').value.trim();if(!name)throw Error(t('nameRequired'));const settings=readSettings();const id='user:'+crypto.randomUUID();customProfiles[id]={...settings,name};await chrome.storage.local.set({customProfiles});profileOptions(id);el('status').textContent=t('profileSaved');}catch(e){el('status').textContent=e.message;}});
 el('deleteProfile').addEventListener('click',async()=>{const id=el('preset').value;if(!id.startsWith('user:'))return;delete customProfiles[id];await chrome.storage.local.set({customProfiles});profileOptions('custom');});
-async function checkIP(){
- const out=el('ipResult');out.textContent='IP · '+t('checking');
- try{const response=await fetch('https://ipwho.is/',{credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(8000)});if(!response.ok)throw Error('HTTP '+response.status);const d=await response.json();if(d.success!==true||typeof d.ip!=='string')throw Error(d.message||'Invalid IP response');lastIP=d;out.textContent=`IP: ${d.ip}\n${t('ipLocation')}: ${[d.country,d.city].filter(Boolean).join(', ')}\n${d.timezone?.id||''}\n${t('ipPrivacy')}`;}catch(e){out.textContent=t('ipFailed')+' · '+e.message;}
+let ipRequest=null;
+function checkIP(){
+ if(ipRequest)return ipRequest;
+ el('ipCountry').hidden=true;el('ipFlag').hidden=true;el('ipCountryName').textContent='';
+ const out=el('ipResult');out.textContent='IP · '+t('checking');out.dataset.state='pending';el('detectIP').disabled=true;
+ ipRequest=(async()=>{
+  try{
+   const response=await fetch('https://ipwho.is/',{credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(8000)});
+   if(!response.ok)throw Error('HTTP '+response.status);
+   const d=await response.json();if(d.success!==true||typeof d.ip!=='string')throw Error(d.message||'Invalid IP response');
+   lastIP=d;
+   const code=String(d.country_code||'').toLowerCase();
+   let country=typeof d.country==='string'?d.country:'';
+   if(/^[a-z]{2}$/.test(code)&&code!=='xx')try{const localized=new Intl.DisplayNames([uiLang],{type:'region'}).of(code.toUpperCase());if(localized&&localized!==code.toUpperCase())country=localized;}catch{}
+   el('ipCountryName').textContent=country||t('ipCountryUnknown');el('ipCountry').hidden=false;
+   if(code!=='xx'&&Object.prototype.hasOwnProperty.call(COUNTRY_FLAG_INDEX,code)){
+    el('ipFlag').style.backgroundPosition='0 -'+(COUNTRY_FLAG_INDEX[code]*30)+'px';el('ipFlag').hidden=false;
+   }
+   out.dataset.state='success';out.textContent=`IP: ${d.ip}\n${t('ipLocation')}: ${d.city||country||t('ipCountryUnknown')}\n${d.timezone?.id||''}`;
+  }catch(e){lastIP=undefined;out.dataset.state='error';out.textContent=t('ipFailed')+' · '+e.message;}
+  finally{el('detectIP').disabled=false;ipRequest=null;}
+ })();
+ return ipRequest;
 }
+el('detectIP').addEventListener('click',checkIP);
 async function checkPage(){
  const panel=el('diagnostics');panel.textContent=t('checking');
  try{
