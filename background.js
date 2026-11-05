@@ -73,11 +73,13 @@ async function detachAll(){
   await status(id,'Выключено');
  }
 }
-async function sync(){
+async function sync(preferredTabId){
  const s=validate(await chrome.storage.local.get(DEFAULT));
  await syncRules(s);
  if(!s.enabled){await detachAll();for(const tab of await chrome.tabs.query({}))await status(tab.id,'Выключено');return;}
- for(const tab of await chrome.tabs.query({}))await apply(tab,s);
+ const tabs=await chrome.tabs.query({});
+ tabs.sort((a,b)=>Number(b.id===preferredTabId)-Number(a.id===preferredTabId));
+ for(const tab of tabs)await apply(tab,s);
 }
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
  if(!['save','state','check'].includes(m?.type))return;
@@ -112,7 +114,7 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   }
   const s=validate(m.settings);
   await chrome.storage.local.set(s);
-  await sync();
+  await sync(m.tabId);
   return {ok:true};
   }catch(e){
    if(m.type!=='save'&&Number.isInteger(m.tabId))await status(m.tabId,e.message,true).catch(console.error);

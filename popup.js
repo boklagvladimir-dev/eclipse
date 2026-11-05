@@ -40,7 +40,17 @@ el('preset').addEventListener('change',()=>{const id=el('preset').value,s=REGION
 for(const id of fieldIds)el(id).addEventListener('input',()=>{if(id!=='enabled'){el('preset').value='custom';syncBasicLanguage();}dirty();});
 // Picker buttons change the locale without changing region fields.
 for(const id of ['languageResults','quickLanguages','languageOrder','zoneResults'])el(id).addEventListener('click',()=>{syncBasicLanguage();dirty();});
-el('save').addEventListener('click',async()=>{el('save').disabled=true;try{const r=await chrome.runtime.sendMessage({type:'save',settings:readSettings()});if(!r.ok)throw Error(r.error);el('status').textContent=t('saved');await showState();}catch(e){el('status').textContent=e.message;}finally{el('save').disabled=false;}});
+async function saveSettings(){
+ el('save').disabled=true;el('enabled').disabled=true;
+ try{
+  const r=await chrome.runtime.sendMessage({type:'save',tabId:currentTab?.id,settings:readSettings()});
+  if(!r.ok)throw Error(r.error);
+  el('status').textContent=t('saved');await showState();
+ }catch(e){el('status').textContent=e.message;}
+ finally{el('save').disabled=false;el('enabled').disabled=false;}
+}
+el('save').addEventListener('click',saveSettings);
+el('enabled').addEventListener('change',saveSettings);
 el('reload').addEventListener('click',async()=>{try{if(currentTab?.id)await chrome.tabs.reload(currentTab.id);}catch(e){el('status').textContent=isMissingTab(e)?t('unsupported'):e.message;}});
 el('storeProfile').addEventListener('click',async()=>{try{const name=el('profileName').value.trim();if(!name)throw Error(t('nameRequired'));const settings=readSettings();const id='user:'+crypto.randomUUID();customProfiles[id]={...settings,name};await chrome.storage.local.set({customProfiles});profileOptions(id);el('status').textContent=t('profileSaved');}catch(e){el('status').textContent=e.message;}});
 el('deleteProfile').addEventListener('click',async()=>{const id=el('preset').value;if(!id.startsWith('user:'))return;delete customProfiles[id];await chrome.storage.local.set({customProfiles});profileOptions('custom');});

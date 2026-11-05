@@ -1,3 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <circle cx="15" cy="16" r="11.5" fill="none" stroke="#8892a7" stroke-width="1.8"/>
+  <defs>
+    <mask id="front-disc"><rect width="32" height="32" fill="white"/><circle cx="17.5" cy="17.3" r="10" fill="black"/></mask>
+  </defs>
+  <g fill="none" stroke="#b8bdc7" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12.3" cy="12.1" r="10" mask="url(#front-disc)"/>
+    <circle cx="17.5" cy="17.3" r="10"/>
+    <path d="M24.5 1.4Q24.1 3.3 22.3 3.7Q24.1 4.1 24.5 6Q24.9 4.1 26.7 3.7Q24.9 3.3 24.5 1.4Z"/>
+  </g>
 </svg>

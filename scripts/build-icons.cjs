@@ -9,7 +9,7 @@ const sizes = [16, 20, 24, 32, 48, 64, 128, 256];
 async function build() {
   for (const n of sizes) {
     await sharp(Buffer.from(source)).resize(n, n).png().toFile(path.join(root, `icon-${n}.png`));
-    for (const [state, color] of Object.entries({green:'#00e52b', red:'#f52235', grey:'#9298a4'})) {
+    for (const [state, color] of Object.entries({green:'#2b973c', red:'#972b2b', grey:'#9298a4'})) {
       const svg = source.replace('</svg>', `<circle cx="25.5" cy="25.5" r="5" fill="${color}"/></svg>`);
       await sharp(Buffer.from(svg)).resize(n, n).png().toFile(path.join(root, `${state}-${n}.png`));
     }

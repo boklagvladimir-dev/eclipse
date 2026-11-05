@@ -11,7 +11,7 @@ function setTabAction(method, details) {
 function isMissingTab(error) {
  return /No tab with (?:id|given id)|Invalid tab ID/i.test(error?.message||'');
 }
-const STATE_COLORS={green:'#00e52b',red:'#f52235',grey:'#9298a4'};
+const STATE_COLORS={green:'#2b973c',red:'#972b2b',grey:'#9298a4'};
 function tabStateView(record,enabled,url){
  if(!enabled)return {color:'grey',label:'off'};
  if(!/^https?:\/\//.test(url||''))return {color:'grey',label:'unsupported'};
