@@ -13,13 +13,27 @@ Chromium поддерживает параметр запуска:
 
 1. Сохраните работу и полностью закройте Chrome, включая фоновые процессы.
 2. Откройте свойства ярлыка Chrome.
-3. В поле «Объект» добавьте после закрывающей кавычки пробел и параметр:
+3. В поле «Объект» сохраните существующий путь и все параметры. Добавьте в самый конец через пробел `--silent-debugger-extension-api`. Если других параметров нет, получится:
 
    ```text
    "C:\Program Files\Google\Chrome\Application\chrome.exe" --silent-debugger-extension-api
    ```
 
-   Сохраните свой фактический путь к chrome.exe, если он отличается.
+   Если в ярлыке уже указан `--source-shortcut-location=start-menu`, оставьте его. Например:
+
+   Было:
+
+   ```text
+   "C:\Program Files\Google\Chrome\Application\chrome.exe" --source-shortcut-location=start-menu
+   ```
+
+   Должно стать:
+
+   ```text
+   "C:\Program Files\Google\Chrome\Application\chrome.exe" --source-shortcut-location=start-menu --silent-debugger-extension-api
+   ```
+
+   Сохраните свой фактический путь к chrome.exe, если он отличается. Параметр добавляется вне кавычек.
 4. Запускайте браузер этим ярлыком. На странице `chrome://version` проверьте,
    что параметр присутствует в поле командной строки.
 
