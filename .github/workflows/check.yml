@@ -17,3 +17,4 @@ jobs:
           node tests/languages.cjs
           node tests/zones.cjs
           node tests/ui.cjs
+          node tests/tab-action.cjs

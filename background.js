@@ -1,4 +1,5 @@
 importScripts('config.js');
+importScripts('tab-action.js');
 if (chrome.debugger?.attach && chrome.storage.session && chrome.declarativeNetRequest?.updateDynamicRules) {
 const RULE=1001;
 const intentionalDetach=new Set();
@@ -6,11 +7,18 @@ const cmd=(tabId,method,params={})=>chrome.debugger.sendCommand({tabId},method,p
 let queue=Promise.resolve();
 const serial=fn=>{const task=queue.then(fn);queue=task.catch(()=>{});return task;};
 const eligible=t=>/^https?:\/\//.test(t.url||t.pendingUrl||'');
+async function forgetTab(id){
+ intentionalDetach.delete(id);
+ await chrome.storage.session.remove(['identity:'+id,'tab:'+id]);
+}
 async function status(id,text,error=false){
+ try{await chrome.tabs.get(id);}catch(e){if(isMissingTab(e)){await forgetTab(id);return;}throw e;}
  await chrome.storage.session.set({['tab:'+id]:{text,error}});
- await chrome.action.setBadgeText({tabId:id,text:''}).catch(()=>{});
  const state=error?'red':text==='Применено'?'green':'grey';
- await chrome.action.setIcon({tabId:id,path:Object.fromEntries([16,20,24,32,48].map(n=>[n,`icons/${state}-${n}.png`]))}).catch(()=>{});
+ try{
+  await setTabAction('setBadgeText',{tabId:id,text:''});
+  await setTabAction('setIcon',{tabId:id,path:Object.fromEntries([16,20,24,32,48].map(n=>[n,`icons/${state}-${n}.png`]))});
+ }catch(e){if(isMissingTab(e)){await forgetTab(id);return;}throw e;}
 }
 async function syncRules(s){
  await chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds:[RULE],addRules:s.enabled?[{id:RULE,priority:1,action:{type:'modifyHeaders',requestHeaders:[{header:'accept-language',operation:'set',value:acceptLanguage(s)}]},condition:{urlFilter:'|http'}}]:[]});
@@ -77,7 +85,7 @@ chrome.runtime.onStartup.addListener(()=>serial(sync).catch(console.error));
 function applyTab(id){return serial(async()=>{
  const s=validate(await chrome.storage.local.get(DEFAULT));
  if(s.enabled)await apply(await chrome.tabs.get(id),s);
-}).catch(console.error);}
+}).catch(e=>{if(!isMissingTab(e))console.error(e);});}
 chrome.tabs.onCreated.addListener(t=>applyTab(t.id));
 chrome.webNavigation.onBeforeNavigate.addListener(d=>{if(d.frameId===0)applyTab(d.tabId);});
 chrome.debugger.onDetach.addListener((source,reason)=>{
@@ -86,7 +94,7 @@ chrome.debugger.onDetach.addListener((source,reason)=>{
  chrome.storage.session.remove('identity:'+source.tabId);
  status(source.tabId,'Отладчик отключён: '+reason,true).catch(()=>{});
 });
-chrome.tabs.onRemoved.addListener(id=>chrome.storage.session.remove(['identity:'+id,'tab:'+id]));
+chrome.tabs.onRemoved.addListener(id=>serial(()=>forgetTab(id)).catch(console.error));
 
 } else {
  chrome.runtime.onMessage.addListener((m,sender,reply)=>{

@@ -33,7 +33,7 @@ for(const id of fieldIds)el(id).addEventListener('input',()=>{if(id!=='enabled')
 // Picker buttons change the locale without changing region fields.
 for(const id of ['languageResults','quickLanguages','languageOrder','zoneResults'])el(id).addEventListener('click',()=>{syncBasicLanguage();dirty();});
 el('save').addEventListener('click',async()=>{el('save').disabled=true;try{const r=await chrome.runtime.sendMessage({type:'save',settings:readSettings()});if(!r.ok)throw Error(r.error);el('status').textContent=t('saved');await showState();}catch(e){el('status').textContent=e.message;}finally{el('save').disabled=false;}});
-el('reload').addEventListener('click',async()=>{if(currentTab?.id)await chrome.tabs.reload(currentTab.id);});
+el('reload').addEventListener('click',async()=>{try{if(currentTab?.id)await chrome.tabs.reload(currentTab.id);}catch(e){el('status').textContent=isMissingTab(e)?t('unsupported'):e.message;}});
 el('storeProfile').addEventListener('click',async()=>{try{const name=el('profileName').value.trim();if(!name)throw Error(t('nameRequired'));const settings=readSettings();const id='user:'+crypto.randomUUID();customProfiles[id]={...settings,name};await chrome.storage.local.set({customProfiles});profileOptions(id);el('status').textContent=t('profileSaved');}catch(e){el('status').textContent=e.message;}});
 el('deleteProfile').addEventListener('click',async()=>{const id=el('preset').value;if(!id.startsWith('user:'))return;delete customProfiles[id];await chrome.storage.local.set({customProfiles});profileOptions('custom');});
 async function checkIP(){
@@ -50,7 +50,7 @@ async function checkPage(){
   const zone=x=>new Intl.DateTimeFormat('en',{timeZone:x}).resolvedOptions().timeZone;
   const rows=[['navigator.language',d.language,p.locale],['navigator.languages',d.languages.join(', '),p.languages.join(', ')],['Intl.DateTimeFormat',d.locale,p.locale],['Intl.NumberFormat',d.numberLocale,p.locale],['timeZone',zone(d.timezone),zone(p.timezone)]];
   const passes=rows.filter(x=>x[1]===x[2]).length;
-  if(p.enabled&&passes<rows.length){await chrome.storage.session.set({['tab:'+currentTab.id]:{error:true,text:'Проверка: '+passes+'/'+rows.length}});await chrome.action.setIcon({tabId:currentTab.id,path:Object.fromEntries([16,20,24,32,48].map(n=>[n,`icons/red-${n}.png`]))});}
+  if(p.enabled&&passes<rows.length){await chrome.storage.session.set({['tab:'+currentTab.id]:{error:true,text:'Проверка: '+passes+'/'+rows.length}});await setTabAction('setIcon',{tabId:currentTab.id,path:Object.fromEntries([16,20,24,32,48].map(n=>[n,`icons/red-${n}.png`]))});}
   panel.textContent=`${p.enabled?'':t('off')+'\n'}${passes}/${rows.length}\n`+rows.map(([name,actual,expected])=>`${actual===expected?'✓':'✕'} ${name}: ${actual}${actual===expected?'':` → ${expected}`}`).join('\n')+'\n\n'+t('checkNote');await showState();
  }catch(e){panel.textContent=e.message;}
 }
