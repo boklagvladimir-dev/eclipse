@@ -90,3 +90,5 @@ node tests/tab-action.cjs
 Бесплатно для некоммерческого использования, изменения и распространения при сохранении авторства и ссылки на https://github.com/boklagvladimir-dev/eclipse. Полные условия — [LICENSE](LICENSE). Это лицензия с ограничением на коммерческое использование.
 
 [История изменений](CHANGELOG.md) · [Решения и дальнейшие проверки](docs/PROJECT-STATUS.md)
+
+[Privacy Policy / Политика конфиденциальности](PRIVACY.md)
