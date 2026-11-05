@@ -1,9 +1,9 @@
 const el=id=>document.getElementById(id);
-const fieldIds=['enabled','timezone','locale','languages','geoEnabled','latitude','longitude'];
-let currentTab,customProfiles={},lastIP;
+const fieldIds=['timezone','locale','languages','geoEnabled','latitude','longitude'];
+let currentTab,customProfiles={},lastIP,enabled=false,applying=false;
 const defaults={enabled:false,preset:'custom',timezone:'UTC',locale:'en-US',languages:['en-US','en'],latitude:0,longitude:0,geoEnabled:false};
-function readSettings(){return {enabled:el('enabled').checked,preset:el('preset').value,timezone:el('timezone').value.trim(),locale:el('locale').value.trim(),languages:readLanguageList(),geoEnabled:el('geoEnabled').checked,latitude:Number(el('latitude').value),longitude:Number(el('longitude').value)};}
-function render(s){for(const id of fieldIds){if(!(id in s))continue;const e=el(id);if(e.type==='checkbox')e.checked=s[id];else e.value=Array.isArray(s[id])?s[id].join(', '):s[id];}if(s.preset)el('preset').value=s.preset;el('simpleLanguage').value=el('locale').value;window.updateZonePreview();window.updateLanguagePreview();summary();}
+function readSettings(){return {enabled,preset:el('preset').value,timezone:el('timezone').value.trim(),locale:el('locale').value.trim(),languages:readLanguageList(),geoEnabled:el('geoEnabled').checked,latitude:Number(el('latitude').value),longitude:Number(el('longitude').value)};}
+function render(s){if('enabled' in s)enabled=!!s.enabled;for(const id of fieldIds){if(!(id in s))continue;const e=el(id);if(e.type==='checkbox')e.checked=s[id];else e.value=Array.isArray(s[id])?s[id].join(', '):s[id];}if(s.preset)el('preset').value=s.preset;el('simpleLanguage').value=el('locale').value;window.updateZonePreview();window.updateLanguagePreview();summary();}
 function summary(){el('profileSummary').textContent=`${el('locale').value} · ${el('timezone').value}${el('geoEnabled').checked?` · ${el('latitude').value}, ${el('longitude').value}`:''}`;}
 function dirty(){el('status').textContent=t('unsaved');summary();}
 function profileOptions(selected){
@@ -20,12 +20,41 @@ async function showState(){
  if(!currentTab?.id)return;
  const id=currentTab.id,s=await chrome.storage.local.get(defaults),state=(await chrome.storage.session.get('tab:'+id))['tab:'+id];
  if(renderId!==stateRender)return;
- const view=tabStateView(state,s.enabled,currentTab.url);
+ if(!applying)enabled=!!s.enabled;
+ const view=applying?{color:'grey',label:'pending'}:tabStateView(state,s.enabled,currentTab.url);
+ renderPower(view);
+
  el('stateDot').style.background=STATE_COLORS[view.color];
+ el('stateDot').dataset.color=view.color;
  el('stateText').textContent=t(view.label);
  el('stateText').title=state?.error?state.text:'';
  el('stateDetail').textContent=state?.error?state.text:'';
 }
+function renderPower(view){
+ const button=el('enabled');
+ button.setAttribute('aria-pressed',String(enabled));
+ button.setAttribute('aria-busy',String(applying));
+ button.dataset.state=view.color;
+ el('powerLabel').textContent=t(applying?'pending':enabled?'disableAction':'enableAction');
+ button.disabled=applying;
+}
+async function saveSettings(){
+ const settings=readSettings();
+ applying=true;el('save').disabled=true;el('enabled').disabled=true;
+ el('status').textContent=t('pending');
+ try{
+  await showState();
+  const r=await chrome.runtime.sendMessage({type:'save',tabId:currentTab?.id,settings});
+  if(!r?.ok)throw Error(r?.error||t('failed'));
+  el('status').textContent=t('saved');
+ }catch(e){el('status').textContent=e.message;}
+ finally{applying=false;el('save').disabled=false;await showState();}
+}
+el('enabled').addEventListener('click',async()=>{
+ if(applying)return;
+ enabled=!enabled;
+ await saveSettings();
+});
 chrome.storage.onChanged?.addListener((changes,area)=>{
  if((area==='session'&&changes['tab:'+currentTab?.id])||(area==='local'&&changes.enabled))return showState().catch(e=>el('status').textContent=e.message);
 });
@@ -40,17 +69,7 @@ el('preset').addEventListener('change',()=>{const id=el('preset').value,s=REGION
 for(const id of fieldIds)el(id).addEventListener('input',()=>{if(id!=='enabled'){el('preset').value='custom';syncBasicLanguage();}dirty();});
 // Picker buttons change the locale without changing region fields.
 for(const id of ['languageResults','quickLanguages','languageOrder','zoneResults'])el(id).addEventListener('click',()=>{syncBasicLanguage();dirty();});
-async function saveSettings(){
- el('save').disabled=true;el('enabled').disabled=true;
- try{
-  const r=await chrome.runtime.sendMessage({type:'save',tabId:currentTab?.id,settings:readSettings()});
-  if(!r.ok)throw Error(r.error);
-  el('status').textContent=t('saved');await showState();
- }catch(e){el('status').textContent=e.message;}
- finally{el('save').disabled=false;el('enabled').disabled=false;}
-}
 el('save').addEventListener('click',saveSettings);
-el('enabled').addEventListener('change',saveSettings);
 el('reload').addEventListener('click',async()=>{try{if(currentTab?.id)await chrome.tabs.reload(currentTab.id);}catch(e){el('status').textContent=isMissingTab(e)?t('unsupported'):e.message;}});
 el('storeProfile').addEventListener('click',async()=>{try{const name=el('profileName').value.trim();if(!name)throw Error(t('nameRequired'));const settings=readSettings();const id='user:'+crypto.randomUUID();customProfiles[id]={...settings,name};await chrome.storage.local.set({customProfiles});profileOptions(id);el('status').textContent=t('profileSaved');}catch(e){el('status').textContent=e.message;}});
 el('deleteProfile').addEventListener('click',async()=>{const id=el('preset').value;if(!id.startsWith('user:'))return;delete customProfiles[id];await chrome.storage.local.set({customProfiles});profileOptions('custom');});
