@@ -1,7 +1,7 @@
 importScripts('config.js');
 importScripts('tab-action.js');
-if (chrome.debugger?.attach && chrome.storage.session && chrome.declarativeNetRequest?.updateDynamicRules) {
-const RULE=1001;
+if (chrome.debugger?.attach && chrome.storage.session && chrome.declarativeNetRequest?.updateDynamicRules && chrome.declarativeNetRequest?.updateSessionRules) {
+const RULE=1001,DOMAIN_ALLOW=1002,TAB_ALLOW=1003;
 const intentionalDetach=new Set();
 const cmd=(tabId,method,params={})=>chrome.debugger.sendCommand({tabId},method,params);
 let queue=Promise.resolve();
@@ -22,13 +22,31 @@ async function status(id,text,error=false){
  await chrome.storage.session.set({['tab:'+id]:record});
  try{await chrome.tabs.get(id);}catch(e){if(isMissingTab(e))await forgetTab(id);else throw e;}
 }
-async function syncRules(s){
- await chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds:[RULE],addRules:s.enabled?[{id:RULE,priority:1,action:{type:'modifyHeaders',requestHeaders:[{header:'accept-language',operation:'set',value:acceptLanguage(s)}]},condition:{urlFilter:'|http'}}]:[]});
+async function syncRules(s,navigatingTab){
+ const rules=s.enabled?[{id:RULE,priority:1,action:{type:'modifyHeaders',requestHeaders:[{header:'accept-language',operation:'set',value:acceptLanguage(s)}]},condition:{urlFilter:'|http'}}]:[];
+ const sites=s.excludedSites||[];
+ if(s.enabled&&sites.length)rules.push({id:DOMAIN_ALLOW,priority:10,action:{type:'allowAllRequests'},condition:{requestDomains:sites,resourceTypes:['main_frame']}});
+ // Per-tab allow rules also cover already-loaded pages and their third-party frames/resources.
+ const tabs=sites.length?await chrome.tabs.query({}):[];
+ const ids=tabs.filter(tab=>isExcludedSite(tab.id===navigatingTab?.id?navigatingTab.url:tab.url,sites)).map(tab=>tab.id);
+ await chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds:[RULE,DOMAIN_ALLOW],addRules:rules});
+ await chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[TAB_ALLOW],addRules:s.enabled&&ids.length?[{id:TAB_ALLOW,priority:20,action:{type:'allow'},condition:{tabIds:ids,urlFilter:'|http'}}]:[]});
+}
+async function detachTab(id,text){
+ const key='identity:'+id;
+ if((await chrome.storage.session.get(key))[key]){
+  intentionalDetach.add(id);
+  try{await chrome.debugger.detach({tabId:id});}
+  catch(e){intentionalDetach.delete(id);if(!isMissingTab(e)&&!/not attached|not connected/i.test(e.message))throw e;}
+  await chrome.storage.session.remove(key);
+ }
+ await status(id,text);
 }
 // Capture the browser's real UA and Client Hints once per attachment; retain across profile changes.
 const identityExpression=`(async()=>{const d=navigator.userAgentData;return {userAgent:navigator.userAgent,platform:navigator.platform,userAgentMetadata:d?{...d.toJSON(),...await d.getHighEntropyValues(['architecture','bitness','model','platformVersion','fullVersionList','wow64'])}:undefined};})()`;
 async function apply(tab,s){
  if(!eligible(tab)){await status(tab.id,'Недоступно');return;}
+ if(isExcludedSite(tab.url||tab.pendingUrl,s.excludedSites)){await detachTab(tab.id,'Исключено');return;}
  const id=tab.id, key='identity:'+id;
  let owned=false;
  try{
@@ -82,9 +100,19 @@ async function sync(preferredTabId){
  for(const tab of tabs)await apply(tab,s);
 }
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
- if(!['save','state','check'].includes(m?.type))return;
+ if(!['save','state','check','site-exclusion'].includes(m?.type))return;
  serial(async()=>{
   try{
+  if(m.type==='site-exclusion'){
+   const tab=await chrome.tabs.get(m.tabId),hostname=siteHostname(tab.url);
+   if(!hostname||hostname!==m.hostname||typeof m.excluded!=='boolean')throw Error('The current site has changed. Reopen Eclipse.');
+   const s=validate(await chrome.storage.local.get(DEFAULT));
+   // Removing a parent-domain exception also restores this subdomain.
+   const sites=m.excluded?[...s.excludedSites,hostname]:s.excludedSites.filter(site=>hostname!==site&&!hostname.endsWith('.'+site));
+   await chrome.storage.local.set({excludedSites:normalizeExcludedSites(sites)});
+   try{await sync(tab.id);}catch(e){await status(tab.id,e.message,true).catch(console.error);throw e;}
+   return {ok:true};
+  }
   if(m.type!=='save'){
    const tab=await chrome.tabs.get(m.tabId),s=validate(await chrome.storage.local.get(DEFAULT));
    const key='tab:'+tab.id,identity=(await chrome.storage.session.get('identity:'+tab.id))['identity:'+tab.id];
@@ -92,6 +120,7 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
    const targets=s.enabled&&eligible(tab)?await chrome.debugger.getTargets():[];
    if(!s.enabled)await status(tab.id,'Выключено');
    else if(!eligible(tab))await status(tab.id,'Недоступно');
+   else if(isExcludedSite(tab.url,s.excludedSites))await detachTab(tab.id,'Исключено');
    else if(!before||!identity||!targets.some(t=>t.tabId===tab.id&&t.attached))await apply(tab,s);
    else{
     // An attached target may belong to another debugger after a stale session.
@@ -99,6 +128,7 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
     catch(e){await chrome.storage.session.remove('identity:'+tab.id);throw e;}
    }
    // The background owns both toolbar and popup status, including diagnostics.
+   if(m.type==='check'&&isExcludedSite(tab.url,s.excludedSites))return {ok:true,excluded:true,settings:s};
    if(m.type==='check'&&eligible(tab)){
     const results=await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:()=>({language:navigator.language,languages:[...navigator.languages],locale:new Intl.DateTimeFormat().resolvedOptions().locale,numberLocale:new Intl.NumberFormat().resolvedOptions().locale,timezone:new Intl.DateTimeFormat().resolvedOptions().timeZone})});
     const page=results[0]?.result;if(!page)throw Error('Нет результата проверки вкладки');
@@ -112,12 +142,13 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
    }
    return {ok:true,state:(await chrome.storage.session.get(key))[key]};
   }
-  const s=validate(m.settings);
+  const stored=await chrome.storage.local.get(DEFAULT);
+  const s=validate({...m.settings,excludedSites:stored.excludedSites});
   await chrome.storage.local.set(s);
   await sync(m.tabId);
   return {ok:true};
   }catch(e){
-   if(m.type!=='save'&&Number.isInteger(m.tabId))await status(m.tabId,e.message,true).catch(console.error);
+   if(['state','check'].includes(m.type)&&Number.isInteger(m.tabId))await status(m.tabId,e.message,true).catch(console.error);
    throw e;
   }
  }).then(reply,e=>reply({ok:false,error:e.message}));
@@ -125,13 +156,17 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
 });
 chrome.runtime.onInstalled.addListener(()=>serial(sync).catch(console.error));
 chrome.runtime.onStartup.addListener(()=>serial(sync).catch(console.error));
-function applyTab(id){return serial(async()=>{
+function applyTab(id,url){return serial(async()=>{
  const s=validate(await chrome.storage.local.get(DEFAULT));
- if(s.enabled)await apply(await chrome.tabs.get(id),s);
+ if(s.enabled){
+  const tab=await chrome.tabs.get(id);if(url)tab.url=url;
+  if(s.excludedSites.length)await syncRules(s,tab);
+  await apply(tab,s);
+ }
 }).catch(e=>{if(!isMissingTab(e))console.error(e);});}
-chrome.tabs.onCreated.addListener(t=>applyTab(t.id));
-chrome.tabs.onUpdated.addListener((id,change)=>{if(change.url||change.status==='complete')return applyTab(id);});
-chrome.webNavigation.onBeforeNavigate.addListener(d=>{if(d.frameId===0)applyTab(d.tabId);});
+chrome.tabs.onCreated.addListener(t=>applyTab(t.id,t.url||t.pendingUrl));
+chrome.tabs.onUpdated.addListener((id,change)=>{if(change.url||change.status==='complete')return applyTab(id,change.url);});
+chrome.webNavigation.onBeforeNavigate.addListener(d=>{if(d.frameId===0)return applyTab(d.tabId,d.url);});
 chrome.debugger.onDetach.addListener((source,reason)=>{
  if(!source.tabId)return;
  if(intentionalDetach.delete(source.tabId))return;
@@ -140,7 +175,7 @@ chrome.debugger.onDetach.addListener((source,reason)=>{
   await status(source.tabId,'Отладчик отключён: '+reason,true);
  }).catch(console.error);
 });
-chrome.tabs.onRemoved.addListener(id=>serial(()=>forgetTab(id)).catch(console.error));
+chrome.tabs.onRemoved.addListener(id=>serial(async()=>{await forgetTab(id);const s=validate(await chrome.storage.local.get(DEFAULT));if(s.excludedSites.length)await syncRules(s);}).catch(console.error));
 
 } else {
  chrome.runtime.onMessage.addListener((m,sender,reply)=>{

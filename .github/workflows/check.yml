@@ -18,4 +18,5 @@ jobs:
           node tests/zones.cjs
           node tests/ui.cjs
           node tests/i18n.cjs
+          node tests/exclusions.cjs
           node tests/tab-action.cjs

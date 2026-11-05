@@ -437,6 +437,8 @@ Object.assign(UI_TEXT,{
     "disableAction": "خاموش کردن"
   }
 });
+const siteExceptionTranslations={"ru": ["Не использовать на этом сайте", "Отключено для этого сайта"], "en": ["Do not use on this site", "Disabled for this site"], "de": ["Auf dieser Website nicht verwenden", "Für diese Website deaktiviert"], "fi": ["Älä käytä tällä sivustolla", "Poistettu käytöstä tällä sivustolla"], "it": ["Non usare su questo sito", "Disattivato per questo sito"], "fr": ["Ne pas utiliser sur ce site", "Désactivé pour ce site"], "es": ["No usar en este sitio", "Desactivado para este sitio"], "pt-BR": ["Não usar neste site", "Desativado neste site"], "zh-CN": ["不在此网站使用", "已对此网站停用"], "ja": ["このサイトでは使用しない", "このサイトでは無効"], "ar": ["عدم الاستخدام على هذا الموقع", "معطّل لهذا الموقع"], "fa": ["در این سایت استفاده نشود", "برای این سایت غیرفعال است"]};
+for(const [lang,[excludeSite,excluded]] of Object.entries(siteExceptionTranslations))Object.assign(UI_TEXT[lang],{excludeSite,excluded});
 const uiChoice=localStorage.getItem('uiLanguage')||'auto';
 function supportedUILanguage(value){
  const tag=String(value||'en').replaceAll('_','-').toLowerCase();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Eclipse",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "minimum_chrome_version": "125",
   "description": "Set website language, locale, time zone and location with regional profiles. Interface available in 12 languages.",
   "permissions": [

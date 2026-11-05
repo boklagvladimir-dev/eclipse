@@ -6,7 +6,7 @@ This policy describes how the Eclipse browser extension handles information. Ecl
 
 ## Local settings
 
-Eclipse stores your selected languages, locale, time zone, optional coordinates, enabled state and saved profiles in your browser's local extension storage. Interface language, display mode and expanded sections are stored locally as interface preferences. These settings are not uploaded to the developer.
+Eclipse stores your selected languages, locale, time zone, optional coordinates, enabled state, site-exception hostnames and saved profiles in your browser's local extension storage. Interface language, display mode and expanded sections are stored locally as interface preferences. These settings are not uploaded to the developer.
 
 Coordinates may come from a regional preset or be entered by you. They represent the location you choose to report to websites; Eclipse does not request your device's actual GPS location.
 
@@ -46,7 +46,7 @@ The optional IP-check request described above is the extension's third-party dat
 
 ## Retention and your choices
 
-Local settings remain until you change or delete them, clear the extension's data or uninstall Eclipse. You can delete saved custom profiles in the interface. Temporary tab records are removed when their tabs close; session storage is cleared when the browser session ends. Disabling Eclipse stops applying overrides and removes its active header rule.
+Local settings remain until you change or delete them, clear the extension's data or uninstall Eclipse. You can delete saved custom profiles in the interface. You can remove a site exception by clearing “Do not use on this site” on an affected site. Site exceptions are stored only locally and are used to skip overrides for the selected hostname and its subdomains. Temporary tab records are removed when their tabs close; session storage is cleared when the browser session ends. Disabling Eclipse stops applying overrides and removes its active header rule.
 
 Close the popup to discard the displayed IP response and diagnostic output. Avoid the IP-check button if you do not want to contact the third-party IP service. Clearing extension data does not erase records a third-party service may independently retain.
 

@@ -1,7 +1,7 @@
 const el=id=>document.getElementById(id);
 const fieldIds=['timezone','locale','languages','geoEnabled','latitude','longitude'];
-let currentTab,customProfiles={},lastIP,enabled=false,applying=false;
-const defaults={enabled:false,preset:'custom',timezone:'UTC',locale:'en-US',languages:['en-US','en'],latitude:0,longitude:0,geoEnabled:false};
+let currentTab,customProfiles={},lastIP,enabled=false,applying=false,excluding=false;
+const defaults={enabled:false,preset:'custom',timezone:'UTC',locale:'en-US',languages:['en-US','en'],latitude:0,longitude:0,geoEnabled:false,excludedSites:[]};
 function readSettings(){return {enabled,preset:el('preset').value,timezone:el('timezone').value.trim(),locale:el('locale').value.trim(),languages:readLanguageList(),geoEnabled:el('geoEnabled').checked,latitude:Number(el('latitude').value),longitude:Number(el('longitude').value)};}
 function render(s){if('enabled' in s)enabled=!!s.enabled;for(const id of fieldIds){if(!(id in s))continue;const e=el(id);if(e.type==='checkbox')e.checked=s[id];else e.value=Array.isArray(s[id])?s[id].join(', '):s[id];}if(s.preset)el('preset').value=s.preset;el('simpleLanguage').value=el('locale').value;window.updateZonePreview();window.updateLanguagePreview();summary();}
 function summary(){el('profileSummary').textContent=`${el('locale').value} · ${el('timezone').value}${el('geoEnabled').checked?` · ${el('latitude').value}, ${el('longitude').value}`:''}`;}
@@ -23,6 +23,11 @@ async function showState(){
  if(!applying)enabled=!!s.enabled;
  const view=applying?{color:'grey',label:'pending'}:tabStateView(state,s.enabled,currentTab.url);
  renderPower(view);
+ const hostname=siteHostname(currentTab.url);
+ el('excludeSite').disabled=!hostname||applying||excluding;
+ if(!excluding)el('excludeSite').checked=isExcludedSite(currentTab.url,s.excludedSites);
+ el('excludedHostname').textContent=hostname;
+
 
  el('stateDot').style.background=STATE_COLORS[view.color];
  el('stateDot').dataset.color=view.color;
@@ -36,7 +41,7 @@ function renderPower(view){
  button.setAttribute('aria-busy',String(applying));
  button.dataset.state=view.color;
  el('powerLabel').textContent=t(applying?'pending':enabled?'disableAction':'enableAction');
- button.disabled=applying;
+ button.disabled=applying||excluding;
 }
 async function saveSettings(){
  const settings=readSettings();
@@ -56,7 +61,20 @@ el('enabled').addEventListener('click',async()=>{
  await saveSettings();
 });
 chrome.storage.onChanged?.addListener((changes,area)=>{
- if((area==='session'&&changes['tab:'+currentTab?.id])||(area==='local'&&changes.enabled))return showState().catch(e=>el('status').textContent=e.message);
+ if((area==='session'&&changes['tab:'+currentTab?.id])||(area==='local'&&(changes.enabled||changes.excludedSites)))return showState().catch(e=>el('status').textContent=e.message);
+});
+el('excludeSite').addEventListener('change',async()=>{
+ if(applying||excluding)return;
+ const tab=currentTab,hostname=siteHostname(tab?.url),excluded=el('excludeSite').checked;
+ if(!hostname)return;
+ excluding=true;el('excludeSite').disabled=true;el('enabled').disabled=true;el('save').disabled=true;
+ el('status').textContent=t('pending');
+ try{
+  const r=await chrome.runtime.sendMessage({type:'site-exclusion',tabId:tab.id,hostname,excluded});
+  if(!r?.ok)throw Error(r?.error||t('failed'));
+  el('status').textContent='';
+ }catch(e){el('status').textContent=e.message;}
+ finally{excluding=false;el('save').disabled=false;await showState();}
 });
 el('uiLanguage').value=uiChoice;el('uiLanguage').addEventListener('change',()=>{localStorage.setItem('uiLanguage',el('uiLanguage').value);location.reload();});
 el('mode').value=localStorage.getItem('mode')||'simple';
@@ -83,6 +101,7 @@ async function checkPage(){
   [currentTab]=await chrome.tabs.query({active:true,currentWindow:true});if(!/^https?:\/\//.test(currentTab?.url||''))throw Error(t('unsupported'));
   const result=await chrome.runtime.sendMessage({type:'check',tabId:currentTab.id});
   if(!result?.ok)throw Error(result?.error||t('failed'));
+  if(result.excluded){panel.textContent=t('excluded');await showState();return;}
   const p=result.settings,rows=comparisonRows(result.page,p);
   const passes=rows.filter(x=>x[1]===x[2]).length;
   panel.textContent=`${p.enabled?'':t('off')+'\n'}${passes}/${rows.length}\n`+rows.map(([name,actual,expected])=>`${actual===expected?'✓':'✕'} ${name}: ${actual}${actual===expected?'':` → ${expected}`}`).join('\n')+'\n\n'+t('checkNote');await showState();

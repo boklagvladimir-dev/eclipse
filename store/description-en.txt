@@ -15,6 +15,7 @@ FEATURES
 • Check the current tab’s language, locale and time zone.
 • Check your public IP when you request it.
 • Use Arabic and Persian interfaces with right-to-left layout.
+• Exclude individual sites with “Do not use on this site”. Exceptions are saved locally and include the selected hostname and its subdomains.
 
 CLEAR STATUS
 The power button applies your current settings immediately and stays pressed while enabled. A green indicator means the settings were applied to the current tab. Red indicates an application error or a mismatch found during a check. Grey indicates that the override is off, pending or unavailable. Error details appear in the popup.
