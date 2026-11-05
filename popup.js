@@ -13,14 +13,22 @@ function profileOptions(selected){
  p.value=[...p.options].some(x=>x.value===selected)?selected:'custom';
 }
 function syncBasicLanguage(){el('simpleLanguage').value=el('locale').value;summary();}
+let stateRender=0;
 async function showState(){
+ const renderId=++stateRender;
+ [currentTab]=await chrome.tabs.query({active:true,currentWindow:true});
  if(!currentTab?.id)return;
- const s=await chrome.storage.local.get(defaults),state=(await chrome.storage.session.get('tab:'+currentTab.id))['tab:'+currentTab.id];
- const active=/^https?:\/\//.test(currentTab.url||'')&&s.enabled&&state&&!state.error&&state.text==='Применено';
- el('stateDot').style.background=!s.enabled?'#9298a4':active?'#22b573':'#e24b50';
- el('stateText').textContent=!s.enabled?t('off'):active?t('working'):t('failed');
- if(state?.error)el('stateText').title=state.text;
+ const id=currentTab.id,s=await chrome.storage.local.get(defaults),state=(await chrome.storage.session.get('tab:'+id))['tab:'+id];
+ if(renderId!==stateRender)return;
+ const view=tabStateView(state,s.enabled,currentTab.url);
+ el('stateDot').style.background=STATE_COLORS[view.color];
+ el('stateText').textContent=t(view.label);
+ el('stateText').title=state?.error?state.text:'';
+ el('stateDetail').textContent=state?.error?state.text:'';
 }
+chrome.storage.onChanged?.addListener((changes,area)=>{
+ if((area==='session'&&changes['tab:'+currentTab?.id])||(area==='local'&&changes.enabled))return showState().catch(e=>el('status').textContent=e.message);
+});
 el('uiLanguage').value=uiChoice;el('uiLanguage').addEventListener('change',()=>{localStorage.setItem('uiLanguage',el('uiLanguage').value);location.reload();});
 el('mode').value=localStorage.getItem('mode')||'simple';
 function mode(){el('advancedSettings').hidden=el('mode').value!=='advanced';localStorage.setItem('mode',el('mode').value);}
@@ -44,15 +52,12 @@ async function checkPage(){
  const panel=el('diagnostics');panel.textContent=t('checking');
  try{
   [currentTab]=await chrome.tabs.query({active:true,currentWindow:true});if(!/^https?:\/\//.test(currentTab?.url||''))throw Error(t('unsupported'));
-  const p=await chrome.storage.local.get(defaults);
-  const results=await chrome.scripting.executeScript({target:{tabId:currentTab.id},world:'MAIN',func:()=>({language:navigator.language,languages:[...navigator.languages],locale:new Intl.DateTimeFormat().resolvedOptions().locale,numberLocale:new Intl.NumberFormat().resolvedOptions().locale,timezone:new Intl.DateTimeFormat().resolvedOptions().timeZone})});
-  const d=results[0]?.result;if(!d)throw Error(t('failed'));
-  const zone=x=>new Intl.DateTimeFormat('en',{timeZone:x}).resolvedOptions().timeZone;
-  const rows=[['navigator.language',d.language,p.locale],['navigator.languages',d.languages.join(', '),p.languages.join(', ')],['Intl.DateTimeFormat',d.locale,p.locale],['Intl.NumberFormat',d.numberLocale,p.locale],['timeZone',zone(d.timezone),zone(p.timezone)]];
+  const result=await chrome.runtime.sendMessage({type:'check',tabId:currentTab.id});
+  if(!result?.ok)throw Error(result?.error||t('failed'));
+  const p=result.settings,rows=comparisonRows(result.page,p);
   const passes=rows.filter(x=>x[1]===x[2]).length;
-  if(p.enabled&&passes<rows.length){await chrome.storage.session.set({['tab:'+currentTab.id]:{error:true,text:'Проверка: '+passes+'/'+rows.length}});await setTabAction('setIcon',{tabId:currentTab.id,path:Object.fromEntries([16,20,24,32,48].map(n=>[n,`icons/red-${n}.png`]))});}
   panel.textContent=`${p.enabled?'':t('off')+'\n'}${passes}/${rows.length}\n`+rows.map(([name,actual,expected])=>`${actual===expected?'✓':'✕'} ${name}: ${actual}${actual===expected?'':` → ${expected}`}`).join('\n')+'\n\n'+t('checkNote');await showState();
  }catch(e){panel.textContent=e.message;}
 }
 el('diagnose').addEventListener('click',async()=>{el('diagnose').disabled=true;await Promise.allSettled([checkIP(),checkPage()]);el('diagnose').disabled=false;});
-globalThis.popupReady=(async()=>{localizeUI();const s=await chrome.storage.local.get({...defaults,customProfiles:{}});customProfiles=s.customProfiles||{};const legacy={fi:'fi-FI','fi-ru':'custom',de:'de-DE',it:'it-IT',ru:'ru-RU'};s.preset=legacy[s.preset]||s.preset;profileOptions(s.preset);render(s);[currentTab]=await chrome.tabs.query({active:true,currentWindow:true});await showState();})().catch(e=>el('status').textContent=e.message);
+globalThis.popupReady=(async()=>{localizeUI();const s=await chrome.storage.local.get({...defaults,customProfiles:{}});customProfiles=s.customProfiles||{};const legacy={fi:'fi-FI','fi-ru':'custom',de:'de-DE',it:'it-IT',ru:'ru-RU'};s.preset=legacy[s.preset]||s.preset;profileOptions(s.preset);render(s);[currentTab]=await chrome.tabs.query({active:true,currentWindow:true});if(currentTab?.id){const r=await chrome.runtime.sendMessage({type:'state',tabId:currentTab.id});if(!r?.ok)el('status').textContent=r?.error||t('failed');}await showState();})().catch(e=>el('status').textContent=e.message);
