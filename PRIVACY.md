@@ -1,6 +1,6 @@
 # Eclipse Privacy Policy
 
-Last updated: 5 November 2026
+Last updated: 8 November 2026
 
 This policy describes how the Eclipse browser extension handles information. Eclipse lets you configure the language, locale, time zone and optional geographical coordinates reported to websites.
 
@@ -30,7 +30,7 @@ With a proxy or split routing, the extension's outgoing IP may differ from the I
 
 ## Applying your selected settings
 
-While enabled, Eclipse uses Chrome's Debugger API and request-header rules to apply your chosen settings. Websites may receive your selected language preferences and, if you enable coordinate overrides and the site's permissions allow it, your selected coordinates. Eclipse does not change your public IP address.
+While enabled, Eclipse uses request-header rules and either Chrome's Debugger API or code injected into the page to apply your chosen settings. Websites may receive your selected language preferences and, if you enable coordinate overrides and the site's permissions allow it, your selected coordinates. Eclipse does not change your public IP address.
 
 Chrome may show a debugging notification. Developer Tools or another debugger may interrupt the overrides.
 
