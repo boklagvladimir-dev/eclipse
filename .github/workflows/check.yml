@@ -13,7 +13,7 @@ jobs:
       - name: Syntax and regression checks
         run: |
           for f in *.js; do node --check "$f"; done
-          node tests/native.cjs
+          node tests/page-profile.cjs
           node tests/languages.cjs
           node tests/zones.cjs
           node tests/ui.cjs
