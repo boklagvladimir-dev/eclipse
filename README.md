@@ -1,8 +1,8 @@
-# Eclipse 0.8.4 — кандидат на выпуск
+# Eclipse 0.8.4
 
 [English](README.en.md) · **Русский**
 
-> Версия 0.8.4 пока находится на проверке в [PR №1](https://github.com/boklagvladimir-dev/eclipse/pull/1). Автоматические тесты не заменяют проверку установленного расширения в Chrome 157.
+> Eclipse 0.8.4 прошёл автоматические проверки; пользователь подтвердил проверку в Chrome 157. Это не означает совместимость со всеми сайтами и браузерами. Сведения об исправлении — [PR №1](https://github.com/boklagvladimir-dev/eclipse/pull/1).
 
 Interface languages: English · Русский · Deutsch · Suomi · Italiano · Français · Español · Português (Brasil) · 简体中文 · 日本語 · العربية · فارسی
 
@@ -32,10 +32,10 @@ Eclipse помогает согласовать параметры, по кот�
 
 ## Скачать
 
-[ZIP-кандидат Eclipse 0.8.4](dist/eclipse-0.8.4.zip) (для проверки и подготовки публикации; не установленная и не проверенная в браузере версия). Сборка: `python scripts/package.py` (только файлы расширения, без тестов и материалов магазина).
+[ZIP Eclipse 0.8.4](dist/eclipse-0.8.4.zip) (архив расширения, не установщик EXE). Сборка: `python scripts/package.py` (только файлы расширения, без тестов и материалов магазина).
 
 
-[Скачать исходники версии 0.8.4](https://github.com/boklagvladimir-dev/eclipse/archive/refs/heads/fix/chrome-157-page-profile.zip), распаковать и загрузить корневую папку проекта как распакованное расширение. Ветка `main` пока содержит 0.8.2.
+[Скачать исходники версии 0.8.4](https://github.com/boklagvladimir-dev/eclipse/archive/refs/heads/main.zip), распаковать и загрузить корневую папку проекта как распакованное расширение.
 
 ## Установка и обновление
 
