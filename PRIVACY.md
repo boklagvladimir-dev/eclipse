@@ -1,6 +1,6 @@
 # Eclipse Privacy Policy
 
-Last updated: 5 November 2026
+Last updated: 8 November 2026
 
 This policy describes how the Eclipse browser extension handles information. Eclipse lets you configure the language, locale, time zone and optional geographical coordinates reported to websites.
 
@@ -13,8 +13,6 @@ Coordinates may come from a regional preset or be entered by you. They represent
 ## Tabs, navigation and browser properties
 
 Eclipse processes tab identifiers and website URLs locally to identify supported HTTP(S) pages, apply your settings when navigation occurs and show the current tab's status. It does not create a browsing-history database or send website URLs or titles to the developer or to the IP-check service.
-
-To preserve your browser identity while changing language preferences, Eclipse temporarily reads the browser's user agent, platform and available User-Agent Client Hints, which may include browser version, operating-system version, architecture, bitness and device-model information. These values and per-tab connection/status records are kept in session storage to manage the overrides. Eclipse does not upload them to the developer.
 
 When you request diagnostics, Eclipse reads the current page's reported language preferences, date and number formatting locales and time zone. The comparison is performed locally. Diagnostics do not read page text, form entries, passwords, messages or account information.
 
@@ -30,9 +28,7 @@ With a proxy or split routing, the extension's outgoing IP may differ from the I
 
 ## Applying your selected settings
 
-While enabled, Eclipse uses Chrome's Debugger API and request-header rules to apply your chosen settings. Websites may receive your selected language preferences and, if you enable coordinate overrides and the site's permissions allow it, your selected coordinates. Eclipse does not change your public IP address.
-
-Chrome may show a debugging notification. Developer Tools or another debugger may interrupt the overrides.
+While enabled, Eclipse uses request-header rules and code injected into the page to apply your chosen settings. Websites may receive your selected language preferences and, if you enable coordinate overrides and the site's permissions allow it, your selected coordinates. Eclipse does not change your public IP address.
 
 ## Advertising, analytics and data transfers
 

@@ -33,7 +33,7 @@ async function showState(){
  el('stateDot').dataset.color=view.color;
  el('stateText').textContent=t(view.label);
  el('stateText').title=state?.error?state.text:'';
- el('stateDetail').textContent=state?.error?state.text:'';
+ el('stateDetail').textContent=state?.error?state.text:state?.pageMode?t('pageMode'):'';
 }
 function renderPower(view){
  const button=el('enabled');

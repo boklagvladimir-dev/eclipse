@@ -1,19 +1,17 @@
 importScripts('config.js');
 importScripts('tab-action.js');
-if (chrome.debugger?.attach && chrome.storage.session && chrome.declarativeNetRequest?.updateDynamicRules && chrome.declarativeNetRequest?.updateSessionRules) {
+importScripts('page-profile.js');
+if (chrome.scripting?.executeScript && chrome.storage.session && chrome.declarativeNetRequest?.updateDynamicRules && chrome.declarativeNetRequest?.updateSessionRules) {
 const RULE=1001,DOMAIN_ALLOW=1002,TAB_ALLOW=1003;
-const intentionalDetach=new Set();
-const cmd=(tabId,method,params={})=>chrome.debugger.sendCommand({tabId},method,params);
 let queue=Promise.resolve();
 const serial=fn=>{const task=queue.then(fn);queue=task.catch(()=>{});return task;};
 const eligible=t=>/^https?:\/\//.test(t.url||t.pendingUrl||'');
 async function forgetTab(id){
- intentionalDetach.delete(id);
- await chrome.storage.session.remove(['identity:'+id,'tab:'+id]);
+ await chrome.storage.session.remove(['tab:'+id,'page-profile:'+id]);
 }
-async function status(id,text,error=false){
+async function status(id,text,error=false,pageMode=false){
  try{await chrome.tabs.get(id);}catch(e){if(isMissingTab(e)){await forgetTab(id);return;}throw e;}
- const record={text,error};
+ const record={text,error,...(pageMode?{pageMode:true}:{})};
  const state=tabStateView(record,text!=='Выключено','https://state.invalid').color;
  try{
   await setTabAction('setBadgeText',{tabId:id,text:''});
@@ -32,69 +30,54 @@ async function syncRules(s,navigatingTab){
  await chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds:[RULE,DOMAIN_ALLOW],addRules:rules});
  await chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[TAB_ALLOW],addRules:s.enabled&&ids.length?[{id:TAB_ALLOW,priority:20,action:{type:'allow'},condition:{tabIds:ids,urlFilter:'|http'}}]:[]});
 }
-async function detachTab(id,text){
- const key='identity:'+id;
- if((await chrome.storage.session.get(key))[key]){
-  intentionalDetach.add(id);
-  try{await chrome.debugger.detach({tabId:id});}
-  catch(e){intentionalDetach.delete(id);if(!isMissingTab(e)&&!/not attached|not connected/i.test(e.message))throw e;}
-  await chrome.storage.session.remove(key);
+async function runPageProfile(id,profile){
+ const details={world:'MAIN',injectImmediately:true,func:applyPageProfile,args:[profile]};
+ let results;
+ try{results=await chrome.scripting.executeScript({...details,target:{tabId:id,allFrames:true}});}
+ catch(e){
+  if(isMissingTab(e))throw e;
+  // A protected child frame can prevent injection into the entire frame tree.
+  results=await chrome.scripting.executeScript({...details,target:{tabId:id}});
  }
+ return results.find(frame=>frame.frameId===0)?.result;
+}
+async function clearPageProfile(id){
+ const key='page-profile:'+id;
+ if(!(await chrome.storage.session.get(key))[key])return;
+ try{if(eligible(await chrome.tabs.get(id)))await runPageProfile(id,null);}
+ catch(e){if(!isMissingTab(e))throw e;}
+ await chrome.storage.session.remove(key);
+}
+async function usePageProfile(id,s){
+ // Store this first so a partial application can still be cleared.
+ await chrome.storage.session.set({['page-profile:'+id]:true});
+ const profile={locale:s.locale,languages:s.languages,timezone:s.timezone,
+  geoEnabled:s.geoEnabled,latitude:s.latitude,longitude:s.longitude};
+ const page=await runPageProfile(id,profile);
+ if(!page||comparisonRows(page,s).some(([,actual,expected])=>actual!==expected)){
+  throw Error('Не удалось подтвердить подмену языка и часового пояса на странице');
+ }
+ await status(id,'Применено',false,true);
+}
+async function deactivateTab(id,text){
+ await clearPageProfile(id);
  await status(id,text);
 }
-// Capture the browser's real UA and Client Hints once per attachment; retain across profile changes.
-const identityExpression=`(async()=>{const d=navigator.userAgentData;return {userAgent:navigator.userAgent,platform:navigator.platform,userAgentMetadata:d?{...d.toJSON(),...await d.getHighEntropyValues(['architecture','bitness','model','platformVersion','fullVersionList','wow64'])}:undefined};})()`;
 async function apply(tab,s){
- if(!eligible(tab)){await status(tab.id,'Недоступно');return;}
- if(isExcludedSite(tab.url||tab.pendingUrl,s.excludedSites)){await detachTab(tab.id,'Исключено');return;}
- const id=tab.id, key='identity:'+id;
- let owned=false;
+ const id=tab.id;
  try{
-  const targets=await chrome.debugger.getTargets();
-  let ours=(await chrome.storage.session.get(key))[key];
-  const attached=targets.some(t=>t.tabId===id&&t.attached);
-  if(ours&&!attached){await chrome.storage.session.remove(key);ours=null;}
-  if(ours){
-   try{await cmd(id,'Runtime.evaluate',{expression:'1',returnByValue:true});owned=true;}
-   catch(e){await chrome.storage.session.remove(key);throw Error('Вкладка занята DevTools или другим расширением: '+e.message);}
+  if(!s.enabled){await deactivateTab(id,'Выключено');return;}
+  if(!eligible(tab)){await status(id,'Недоступно');return;}
+  if(isExcludedSite(tab.url||tab.pendingUrl,s.excludedSites)){
+   await deactivateTab(id,'Исключено');
+   return;
   }
-  if(!ours){
-   if(attached)throw Error('Вкладка занята DevTools или другим расширением');
-   await chrome.debugger.attach({tabId:id},'1.3');
-   owned=true;
-   await chrome.storage.session.set({[key]:{attaching:true}});
-   const r=await cmd(id,'Runtime.evaluate',{expression:identityExpression,awaitPromise:true,returnByValue:true});
-   if(!r.result?.value?.userAgent)throw Error('Не удалось прочитать параметры браузера');
-   await chrome.storage.session.set({[key]:r.result.value});
-  }
-  const identity=(await chrome.storage.session.get(key))[key];
-  await cmd(id,'Emulation.setTimezoneOverride',{timezoneId:s.timezone});
-  await cmd(id,'Emulation.setLocaleOverride',{locale:s.locale});
-  await cmd(id,'Emulation.setUserAgentOverride',{...identity,acceptLanguage:s.languages.join(',')});
-  if(s.geoEnabled)await cmd(id,'Emulation.setGeolocationOverride',{latitude:s.latitude,longitude:s.longitude,accuracy:30});
-  else await cmd(id,'Emulation.clearGeolocationOverride');
-  await status(id,'Применено');
- }catch(e){
-  // Do not leave a partially configured debugger session running.
-  if(owned){intentionalDetach.add(id);await chrome.debugger.detach({tabId:id}).catch(()=>intentionalDetach.delete(id));}
-  await chrome.storage.session.remove(key);
-  await status(id,e.message,true);
- }
-}
-async function detachAll(){
- const data=await chrome.storage.session.get(null);
- for(const key of Object.keys(data).filter(k=>k.startsWith('identity:'))){
-  const id=Number(key.slice(9));
-  intentionalDetach.add(id);
-  await chrome.debugger.detach({tabId:id}).catch(()=>{});
-  await chrome.storage.session.remove(key);
-  await status(id,'Выключено');
- }
+  await usePageProfile(id,s);
+ }catch(e){await status(id,e.message,true);}
 }
 async function sync(preferredTabId){
  const s=validate(await chrome.storage.local.get(DEFAULT));
  await syncRules(s);
- if(!s.enabled){await detachAll();for(const tab of await chrome.tabs.query({}))await status(tab.id,'Выключено');return;}
  const tabs=await chrome.tabs.query({});
  tabs.sort((a,b)=>Number(b.id===preferredTabId)-Number(a.id===preferredTabId));
  for(const tab of tabs)await apply(tab,s);
@@ -115,29 +98,15 @@ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
   }
   if(m.type!=='save'){
    const tab=await chrome.tabs.get(m.tabId),s=validate(await chrome.storage.local.get(DEFAULT));
-   const key='tab:'+tab.id,identity=(await chrome.storage.session.get('identity:'+tab.id))['identity:'+tab.id];
-   const before=(await chrome.storage.session.get(key))[key];
-   const targets=s.enabled&&eligible(tab)?await chrome.debugger.getTargets():[];
-   if(!s.enabled)await status(tab.id,'Выключено');
-   else if(!eligible(tab))await status(tab.id,'Недоступно');
-   else if(isExcludedSite(tab.url,s.excludedSites))await detachTab(tab.id,'Исключено');
-   else if(!before||!identity||!targets.some(t=>t.tabId===tab.id&&t.attached))await apply(tab,s);
-   else{
-    // An attached target may belong to another debugger after a stale session.
-    try{await cmd(tab.id,'Runtime.evaluate',{expression:'1',returnByValue:true});}
-    catch(e){await chrome.storage.session.remove('identity:'+tab.id);throw e;}
-   }
+   const key='tab:'+tab.id;
+   await apply(tab,s);
    // The background owns both toolbar and popup status, including diagnostics.
    if(m.type==='check'&&isExcludedSite(tab.url,s.excludedSites))return {ok:true,excluded:true,settings:s};
    if(m.type==='check'&&eligible(tab)){
     const results=await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:()=>({language:navigator.language,languages:[...navigator.languages],locale:new Intl.DateTimeFormat().resolvedOptions().locale,numberLocale:new Intl.NumberFormat().resolvedOptions().locale,timezone:new Intl.DateTimeFormat().resolvedOptions().timeZone})});
     const page=results[0]?.result;if(!page)throw Error('Нет результата проверки вкладки');
     const rows=comparisonRows(page,s),passes=rows.filter(r=>r[1]===r[2]).length;
-    const active=(await chrome.storage.session.get('identity:'+tab.id))['identity:'+tab.id];
-    if(s.enabled&&active){
-     await cmd(tab.id,'Runtime.evaluate',{expression:'1',returnByValue:true});
-     await status(tab.id,passes===rows.length?'Применено':'Проверка: '+passes+'/'+rows.length,passes!==rows.length);
-    }
+    if(s.enabled)await status(tab.id,passes===rows.length?'Применено':'Проверка: '+passes+'/'+rows.length,passes!==rows.length,true);
     return {ok:true,page,settings:s};
    }
    return {ok:true,state:(await chrome.storage.session.get(key))[key]};
@@ -167,18 +136,11 @@ function applyTab(id,url){return serial(async()=>{
 chrome.tabs.onCreated.addListener(t=>applyTab(t.id,t.url||t.pendingUrl));
 chrome.tabs.onUpdated.addListener((id,change)=>{if(change.url||change.status==='complete')return applyTab(id,change.url);});
 chrome.webNavigation.onBeforeNavigate.addListener(d=>{if(d.frameId===0)return applyTab(d.tabId,d.url);});
-chrome.debugger.onDetach.addListener((source,reason)=>{
- if(!source.tabId)return;
- if(intentionalDetach.delete(source.tabId))return;
- serial(async()=>{
-  await chrome.storage.session.remove('identity:'+source.tabId);
-  await status(source.tabId,'Отладчик отключён: '+reason,true);
- }).catch(console.error);
-});
+chrome.webNavigation.onCommitted?.addListener(d=>applyTab(d.tabId,d.frameId===0?d.url:undefined));
 chrome.tabs.onRemoved.addListener(id=>serial(async()=>{await forgetTab(id);const s=validate(await chrome.storage.local.get(DEFAULT));if(s.excludedSites.length)await syncRules(s);}).catch(console.error));
 
 } else {
  chrome.runtime.onMessage.addListener((m,sender,reply)=>{
-  if(m?.type==='save')reply({ok:false,error:'Браузер не предоставляет необходимые API: Debugger, storage.session, declarativeNetRequest. Нужен современный браузер Chromium.'});
+  if(m?.type==='save')reply({ok:false,error:'Браузер не предоставляет необходимые API: scripting, storage.session, declarativeNetRequest. Нужен современный браузер Chromium.'});
  });
 }
