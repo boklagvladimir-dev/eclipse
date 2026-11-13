@@ -4,7 +4,7 @@
 
 Eclipse is a Manifest V3 extension for Chromium-based **desktop** browsers. It applies user-selected language, locale, time zone and optional coordinates on supported web pages. Choose a regional preset or create a custom profile.
 
-**Version:** 0.8.4 (release candidate). Changes are under review in [PR #1](https://github.com/boklagvladimir-dev/eclipse/pull/1); desktop browser smoke testing is still required before release.
+**Version:** 0.8.4. Automated CI checks passed and the user confirmed a Chrome 157 browser check. This is not proof of compatibility across all sites and browsers. See [PR #1](https://github.com/boklagvladimir-dev/eclipse/pull/1) for the change history.
 
 ## Features
 
@@ -20,11 +20,11 @@ Eclipse is a Manifest V3 extension for Chromium-based **desktop** browsers. It a
 
 For development and testing:
 
-1. Download the [0.8.4 candidate source](https://github.com/boklagvladimir-dev/eclipse/archive/refs/heads/fix/chrome-157-page-profile.zip) and extract it to a permanent folder, or clone that branch.
+1. Download the [0.8.4 source](https://github.com/boklagvladimir-dev/eclipse/archive/refs/heads/main.zip) and extract it to a permanent folder, or clone the repository.
 2. Open `chrome://extensions` (or the equivalent page in your Chromium browser).
 3. Turn on **Developer mode**, select **Load unpacked**, and choose the folder containing `manifest.json`.
 
-The packaged candidate is at [dist/eclipse-0.8.4.zip](dist/eclipse-0.8.4.zip). It is an extension ZIP for packaging or store review, **not** an executable installer. For **Load unpacked**, extract it first.
+The packaged extension is at [dist/eclipse-0.8.4.zip](dist/eclipse-0.8.4.zip). It is an extension ZIP for packaging or store review, **not** an executable installer. For **Load unpacked**, extract it first.
 
 To update an unpacked installation without creating a new extension instance, replace the files inside its existing folder, then click **Reload** on the extensions page. Back up any locally modified files beforehand.
 
