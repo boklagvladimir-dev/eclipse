@@ -1,4 +1,8 @@
-# Eclipse 0.8.4
+# Eclipse 0.8.4 — кандидат на выпуск
+
+[English](README.en.md) · **Русский**
+
+> Версия 0.8.4 пока находится на проверке в [PR №1](https://github.com/boklagvladimir-dev/eclipse/pull/1). Автоматические тесты не заменяют проверку установленного расширения в Chrome 157.
 
 Interface languages: English · Русский · Deutsch · Suomi · Italiano · Français · Español · Português (Brasil) · 简体中文 · 日本語 · العربية · فارسی
 
@@ -28,10 +32,10 @@ Eclipse помогает согласовать параметры, по кот�
 
 ## Скачать
 
-[ZIP для загрузки в Chrome Web Store](dist/eclipse-0.8.4.zip). Сборка: `python scripts/package.py` (только файлы расширения, без тестов и материалов магазина).
+[ZIP-кандидат Eclipse 0.8.4](dist/eclipse-0.8.4.zip) (для проверки и подготовки публикации; не установленная и не проверенная в браузере версия). Сборка: `python scripts/package.py` (только файлы расширения, без тестов и материалов магазина).
 
 
-[Скачать исходники ZIP](https://github.com/boklagvladimir-dev/eclipse/archive/refs/heads/main.zip), распаковать и загрузить корневую папку проекта как распакованное расширение.
+[Скачать исходники версии 0.8.4](https://github.com/boklagvladimir-dev/eclipse/archive/refs/heads/fix/chrome-157-page-profile.zip), распаковать и загрузить корневую папку проекта как распакованное расширение. Ветка `main` пока содержит 0.8.2.
 
 ## Установка и обновление
 
@@ -87,12 +91,10 @@ node tests/exclusions.cjs
 node tests/languages.cjs
 node tests/zones.cjs
 node tests/ui.cjs
+node tests/i18n.cjs
 node tests/tab-action.cjs
 
 Проверены жизненный цикл подмены с моделью Chrome API, поиск, локали, профили, переводы, переключение режимов, сохранение профилей, обработка успешного/недоступного IP-сервиса. Реального установленного браузера в среде сборки нет: визуальная и сетевая проверка на устройстве пользователя ещё нужна. Подготовлены размеры иконки для панели и варианты с точками состояния.
-
-## Плашка Chrome
-
 
 ## Лицензия
 
@@ -100,7 +102,7 @@ node tests/tab-action.cjs
 
 [История изменений](CHANGELOG.md) · [Решения и дальнейшие проверки](docs/PROJECT-STATUS.md)
 
-[Privacy Policy / Политика конфиденциальности](PRIVACY.md)
+[Privacy Policy / Политика конфиденциальности](PRIVACY.md) · [English guide](README.en.md)
 
 ## Исключения для сайтов
 
